@@ -41,26 +41,39 @@ class TNTSearchEngine extends Engine
      */
     public function update($models)
     {
-        $this->initIndex($models->first());
-        $this->tnt->selectIndex("{$models->first()->searchableAs()}.index");
-        $index = $this->tnt->getIndex();
-        $index->setPrimaryKey($models->first()->getKeyName());
+        $languages = array();
+        if(($languages = config('scout.tntsearch.languages')) && is_array($languages)) {
+          foreach ($languages as $language) {
+            $this->initIndex($models->first(), $language);
+            $this->tnt->selectIndex("{$models->first()->searchableAs()}.{$language}.index");
+            $index = $this->tnt->getIndex();
+            $this->updateItem($models, $index, $language);
+          }
+        } else {
+          $this->tnt->selectIndex("{$models->first()->searchableAs()}.index");
+          $index = $this->tnt->getIndex();
+          $this->updateItem($models, $index);
+        }
+    }
 
-        $index->indexBeginTransaction();
-        $models->each(function ($model) use ($index) {
-            $array = $model->toSearchableArray();
+    protected function updateItem($models, $index, $language = null) {
+      $index->setPrimaryKey($models->first()->getKeyName());
 
-            if (empty($array)) {
-                return;
-            }
+      $index->indexBeginTransaction();
+      $models->each(function ($model) use ($index, $language) {
+          $array = $model->toSearchableArray($language);
 
-            if ($model->getKey()) {
-                $index->update($model->getKey(), $array);
-            } else {
-                $index->insert($array);
-            }
-        });
-        $index->indexEndTransaction();
+          if (empty($array)) {
+              return;
+          }
+
+          if ($model->getKey()) {
+              $index->update($model->getKey(), $array);
+          } else {
+              $index->insert($array);
+          }
+      });
+      $index->indexEndTransaction();
     }
 
     /**
@@ -144,7 +157,11 @@ class TNTSearchEngine extends Engine
     {
         $index = $builder->index ?: $builder->model->searchableAs();
         $limit = $builder->limit ?: 10000;
-        $this->tnt->selectIndex("{$index}.index");
+        if($language = app()->getLocale()) {
+          $this->tnt->selectIndex("{$index}.{$language}.index");
+        } else {
+          $this->tnt->selectIndex("{$index}.index");
+        }
 
         $this->builder = $builder;
 
@@ -184,7 +201,7 @@ class TNTSearchEngine extends Engine
         $keys = collect($results['ids'])->values()->all();
 
         $builder = $this->getBuilder($model);
-        
+
         if($this->builder->queryCallback){
             call_user_func($this->builder->queryCallback, $builder);
         }
@@ -251,12 +268,12 @@ class TNTSearchEngine extends Engine
         return $results['hits'];
     }
 
-    public function initIndex($model)
+    public function initIndex($model, $language = null)
     {
         $indexName = $model->searchableAs();
 
-        if (!file_exists($this->tnt->config['storage']."/{$indexName}.index")) {
-            $indexer = $this->tnt->createIndex("$indexName.index");
+        if (!file_exists($this->tnt->config['storage']."/{$indexName}.{$language}.index")) {
+            $indexer = $this->tnt->createIndex("$indexName.$language.index");
             $indexer->setDatabaseHandle($model->getConnection()->getPdo());
             $indexer->setPrimaryKey($model->getKeyName());
         }
