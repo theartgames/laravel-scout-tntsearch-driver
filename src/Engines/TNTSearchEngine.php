@@ -194,7 +194,7 @@ class TNTSearchEngine extends Engine
      */
     public function map(Builder $builder, $results, $model)
     {
-        if (count($results['ids']) === 0) {
+        if (is_null($results['ids']) || count($results['ids']) === 0) {
             return Collection::make();
         }
 
@@ -305,7 +305,7 @@ class TNTSearchEngine extends Engine
 
         $discardIds = $builder->model->newQuery()
             ->select($qualifiedKeyName)
-            ->leftJoin(DB::raw('(' . $sub->getQuery()->toSql() .') as sub'), $subQualifiedKeyName, '=', $qualifiedKeyName)
+            ->leftJoin(DB::raw('('.$sub->getQuery()->toSql().') as '. $builder->model->getConnection()->getTablePrefix() .'sub'), $subQualifiedKeyName, '=', $qualifiedKeyName)
             ->addBinding($sub->getQuery()->getBindings(), 'join')
             ->whereIn($qualifiedKeyName, $searchResults)
             ->whereNull($subQualifiedKeyName)
@@ -403,5 +403,20 @@ class TNTSearchEngine extends Engine
             list($column, $direction) = $orderBy;
             return $builder->orderBy($column, $direction);
         }, $builder);
+    }
+
+    /**
+     * Flush all of the model's records from the engine.
+     *
+     * @param  \Illuminate\Database\Eloquent\Model  $model
+     * @return void
+     */
+    public function flush($model)
+    {
+        $indexName   = $model->searchableAs();
+        $pathToIndex = $this->tnt->config['storage']."/{$indexName}.index";
+        if (file_exists($pathToIndex)) {
+            unlink($pathToIndex);
+        }
     }
 }
