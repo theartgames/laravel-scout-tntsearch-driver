@@ -9,7 +9,7 @@
     }],
     "require": {
         "php": ">=7.0",
-        "teamtnt/tntsearch": "2.0.2",
+        "teamtnt/tntsearch": "2.0.0",
         "laravel/scout": "5.0.*",
         "illuminate/bus": "~5.4",
         "illuminate/contracts": "~5.4",
